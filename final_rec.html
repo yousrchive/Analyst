@@ -68,8 +68,41 @@ for epoch in range(epochs):
 model.save_pretrained("./finetuned_model")
 tokenizer.save_pretrained("./finetuned_model")>
   
+인사이트:
+    - 딥러닝 훈련 데이터셋이 필요하다.
+    한편, 훈련 데이터는 어디서 떼옴? 관광지, 일상언어와 관련되어야 할텐데.
+    - 토크나이저, 손실함수, 벡터화 등 모델 선정 필요
+    - 이 단어가 들어가 있으면 1점, 아니면 0점 - 이렇게 부과하는 건 맞지 않은 듯.
+    -> 아침, 점심, 저녁, 밤, 오후, 오전 외 유의어 선정.
+
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
+import torch
+
+# GPT-2 모델 및 토크나이저 로딩
+model_name = "gpt2"
+tokenizer = GPT2Tokenizer.from_pretrained(model_name)
+model = GPT2LMHeadModel.from_pretrained(model_name)
+
+# 모델의 토크나이저 최대 입력 길이 설정
+max_length = model.config.n_positions
+
+def predict_time_of_day(input_text):
+    # 입력 텍스트를 토큰화
+    input_ids = tokenizer.encode(input_text, return_tensors="pt", max_length=max_length)
+
+    # 모델을 통해 예측
+    with torch.no_grad():
+        logits = model(input_ids).logits[:, -1, :]
+    
+    # 확률 분포에서 가장 높은 값을 가지는 인덱스 찾기
+    predicted_time_index = torch.argmax(logits, dim=-1).item()
+
+    # 인덱스를 아침, 점심, 저녁 중 하나로 변환
+    time_of_day = {0: "아침", 1: "점심", 2: "저녁"}.get(predicted_time_index, "알 수 없음")
+
+    return time_of_day
 
 
-그런데 시간대를 나타내는 것 중 '아침, 점심, 저녁, 밤, 오후, 오전'만 사용하기에
-유의어, 주위어, 하위어들이 반영되기 어렵다고 생각했다.
+
+데이터 유형을 정하고 확실히 하는 게 낫겠다는 생각. 
 

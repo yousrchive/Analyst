@@ -1,0 +1,75 @@
+#시간대 추천 알고리즘 개발
+-- Final Project
+
+여행지 추천 서비스에서 백엔드 모델링 파트를 맡았다.
+관광지별로 모아진 리뷰 데이터들을 이용해서
+어떤 시간대에 많은 사람들이 방문하였는지를 유추하고,
+그에 따라 방문 시간대를 추천하고, 스케쥴링에 이용할 예정이다.
+
+## 첫 시도
+
+[code]
+
+<import torch
+from transformers import BertTokenizer, BertForSequenceClassification, AdamW
+from torch.utils.data import Dataset, DataLoader
+
+# 아침, 점심, 저녁 데이터셋 생성
+morning_data = ["아침 출근길에 라디오를 들었다. 보통은 노래를 들으면서 가는 편이다. 아침형 인간이 아니라 이른 아침에 움직이려면 어떤 식으로든 에너지를 끌어올리는 시간이 필요하기 때문이다. 첫 번째는 커피, 두 번째는 음악으로 도움을 받는다. 스스로 해결하려면 점심깨나 되어야 가능할 일이다. 느릿하게 서서히 오르는 걸. 그러고 나면 강의 하나는 끝나버릴 시간이 되어버리니까 기다려줄 수가 없다. 오전 10시 강의가 있는 날에는 무척 분주하다. 요즘은 예전보다 아침잠이 줄어서 7시쯤이면 눈이 떠지니 좀 나아졌다. 나는 눈 뜨자마자 핸드폰을 연다. 메일 확인 후, 세수를 하고 로션을 바른다. 그리고 차가운 커피를 마시면서, 간단하게 먹을 간식을 준비해 놓거나 빨래를 확인하고, 옷을 입는다. 식탁에 앉아 커피를 마실 시간이 없다. 커피 한 잔, 집안일 한 번이 반복되다가 커피를 다 마시면 양치질을 하고 집을 나선다.그날 공교롭게도 라디오에서 나온 사연이 '초라하지 않은 아침을 보내고 싶어요.'였다. 앞에 이야기는 흘려들어서 아무 생각도 나질 않는다. '초라'라는 단어에 정신이 번뜩했다. 나도 혹시 초라한 아침을 보내고 있지는 않은가, 하는 생각이 들었기 때문이다. 내 아침은 어떤 단어로 표현될까. 대충 떠올려봐도 긍정적인 단어와 거리가 멀다. 정신없고 부산스러운 아침이었다. 커피는 여유로운 느낌인데 나와 만나면 바쁨을 표현하는 단어가 되어 버렸다. 잠시나마 앉아서 커피 한 잔도 못 마시는 여자의 출근준비가 제목으로 어울린달까. 시간이 있을 때 아무 것도 하지 않으면 어떠냐는 질문을 받아 보았는데 나는 견디지 못하겠다는 대답을 했다. 어떤 사람이 내게 말했다. 예쁜 걸 좋아하고 그런 것만 찾아서 하면 다른 사람들이 예쁜 걸 보면 나를 떠올린다는 말이었다. 주변 사람들은 나를 보면 바쁨을 먼저 생각한다. 이 글을 쓰는 지금도 아침 커피를 마시며 출근 준비를 하는 중이다. 한 가지만 하면 시간이 아까워서, 커피 마시면서 서류를 뽑다가 글도 쓴다. 나의 아침은 바쁘다. 오늘도, 내일도 똑같이 바쁠 것이다. 시간 여유는 없지만, 있다 해도 내가 못 견딜 일이다. 그러니까 내 아침은 초라하지 않다. 내 아침 풍경은 매일 무언가 하려고 애쓰는 모습이다. 이제 커피잔이 비었으니 일하러 가야겠다."]
+lunch_data = ["점심은 샐러드를 먹었다.", "점심에는 떡볶이를 먹었다.", "점심은 도시락을 가져왔다."]
+dinner_data = ["저녁에는 스파게티를 먹었다.", "저녁에는 치킨을 주문했다.", "저녁에는 김치찌개를 끓였다."]
+
+# 모든 데이터를 하나의 리스트로 통합
+all_data = morning_data + lunch_data + dinner_data
+
+# 레이블 지정
+labels = [0] * len(morning_data) + [1] * len(lunch_data) + [2] * len(dinner_data)
+
+# BERT 토크나이저 및 모델 불러오기
+model_name = "bert-base-uncased"
+tokenizer = BertTokenizer.from_pretrained(model_name)
+model = BertForSequenceClassification.from_pretrained(model_name, num_labels=3)
+
+# 훈련 데이터셋 생성
+class CustomDataset(Dataset):
+    def __init__(self, texts, labels):
+        self.texts = texts
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, idx):
+        return {"text": self.texts[idx], "label": self.labels[idx]}
+
+train_dataset = CustomDataset(all_data, labels)
+train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
+
+# Optimizer 및 손실 함수 설정
+optimizer = AdamW(model.parameters(), lr=5e-5)
+criterion = torch.nn.CrossEntropyLoss()
+
+# Fine-tuning
+model.train()
+epochs = 3
+
+for epoch in range(epochs):
+    for batch in train_dataloader:
+        inputs = tokenizer(batch["text"], return_tensors="pt", padding=True, truncation=True)
+        labels = torch.tensor(batch["label"])
+
+        optimizer.zero_grad()
+        outputs = model(**inputs, labels=labels)
+        loss = outputs.loss
+        loss.backward()
+        optimizer.step()
+
+# Fine-tuned 모델 저장
+model.save_pretrained("./finetuned_model")
+tokenizer.save_pretrained("./finetuned_model")>
+  
+
+
+그런데 시간대를 나타내는 것 중 '아침, 점심, 저녁, 밤, 오후, 오전'만 사용하기에
+유의어, 주위어, 하위어들이 반영되기 어렵다고 생각했다.
+
